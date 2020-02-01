@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "CloudFileSystem": {
+      "commandName": "Project",
+      "commandLineArgs": "-m X:"
+    }
+  }
+}

@@ -1,0 +1,5 @@
+/.vs/
+/CloudFileSystem/bin/
+/CloudFileSystem/obj/
+*.vspscc
+*.user

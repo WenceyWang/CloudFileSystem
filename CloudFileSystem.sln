@@ -1,0 +1,39 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29521.150
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CloudFileSystem", "CloudFileSystem\CloudFileSystem.csproj", "{DAB039C2-5CE4-45A5-A726-05A873AAF9B3}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{3DD99A2D-9AED-484A-B1E7-BA384A2670C1}"
+	ProjectSection(SolutionItems) = preProject
+		readme.md = readme.md
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DAB039C2-5CE4-45A5-A726-05A873AAF9B3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DAB039C2-5CE4-45A5-A726-05A873AAF9B3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DAB039C2-5CE4-45A5-A726-05A873AAF9B3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DAB039C2-5CE4-45A5-A726-05A873AAF9B3}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {CB3B6BCA-3826-4EFA-A31C-29AF9EB38D7B}
+	EndGlobalSection
+	GlobalSection(TeamFoundationVersionControl) = preSolution
+		SccNumberOfProjects = 2
+		SccEnterpriseProvider = {4CA58AB2-18FA-4F8D-95D4-32DDF27D184C}
+		SccTeamFoundationServer = https://vsts.dreamry.org/defaultcollection
+		SccLocalPath0 = .
+		SccProjectUniqueName1 = CloudFileSystem\\CloudFileSystem.csproj
+		SccProjectName1 = CloudFileSystem
+		SccLocalPath1 = CloudFileSystem
+	EndGlobalSection
+EndGlobal
