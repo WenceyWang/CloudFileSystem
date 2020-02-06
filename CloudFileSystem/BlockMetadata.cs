@@ -1,17 +1,17 @@
 ﻿using System ;
-using System.Collections ;
-using System.Collections.Generic ;
+using System . Collections ;
+using System . Collections . Generic ;
 using System . ComponentModel . DataAnnotations ;
-using System.Linq ;
+using System . Linq ;
 
 namespace DreamRecorder . CloudFileSystem
 {
 
 	public class BlockMetadata
 	{
-		
+
 		[Key]
-		public Guid Guid { get; set; }
+		public Guid Guid { get ; set ; }
 
 		public string RemoteFileId { get ; set ; }
 

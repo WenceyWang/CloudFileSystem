@@ -12,17 +12,9 @@ namespace DreamRecorder . CloudFileSystem
 	public class CloudFileSystemService : Service
 	{
 
-		private class CommandLineUsageException : Exception
-		{
-
-			public CommandLineUsageException ( string message = null ) : base ( message )
-				=> HasMessage = null != message ;
-
-			public bool HasMessage { get ; }
-
-		}
-
 		public string ProgramName => $"{nameof ( DreamRecorder )}{nameof ( CloudFileSystem )}" ;
+
+		public FileSystemHost Host { get ; private set ; }
 
 		public CloudFileSystemService ( ) : base ( nameof ( CloudFileSystemService ) ) { }
 
@@ -167,7 +159,15 @@ namespace DreamRecorder . CloudFileSystem
 			}
 		}
 
-		public FileSystemHost Host { get ; private set ; }
+		private class CommandLineUsageException : Exception
+		{
+
+			public bool HasMessage { get ; }
+
+			public CommandLineUsageException ( string message = null ) : base ( message )
+				=> HasMessage = null != message ;
+
+		}
 
 	}
 

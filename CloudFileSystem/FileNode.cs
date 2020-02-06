@@ -1,130 +1,130 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net;
-using System.Threading.Tasks;
+﻿using System ;
+using System . Collections ;
+using System . Collections . Generic ;
+using System . IO ;
+using System . Linq ;
+using System . Threading . Tasks ;
 
-using Microsoft.Graph;
-using Microsoft.Graph.Auth;
+using Microsoft . Graph ;
 
-namespace DreamRecorder.CloudFileSystem
+namespace DreamRecorder . CloudFileSystem
 {
 
 	public class FileNode
 	{
 
-		public DateTime? ClosedTime { get; set; }
-
-		public FileMetadata Metadata { get; set; }
-
-		public List<BlockMetadata> Blocks { get; set; } = new List<BlockMetadata>();
-
 		public int ReferenceCount = 1 ;
+
+		public DateTime ? ClosedTime { get ; set ; }
+
+		public FileMetadata Metadata { get ; set ; }
+
+		public List <BlockMetadata> Blocks { get ; set ; } = new List <BlockMetadata> ( ) ;
+
+		public SortedList <long , CachedBlock> CachedBlocks { get ; set ; } =
+			new SortedList <long , CachedBlock> ( ) ;
+
+		public GraphServiceClient GraphServiceClient
+			=> CloudFileSystem . Current . GraphServiceClient ;
+
+		public long BlockSize => CloudFileSystem . BlockSize ;
 
 		public FileNode ( FileMetadata fileMetadata ) => Metadata = fileMetadata ;
 
-		public void Flush()
+		public void Flush ( )
 		{
-			DataContext dataContext = CloudFileSystem.Current.DataContext;
+			DataContext dataContext = CloudFileSystem . Current . DataContext ;
 
-			lock (dataContext)
+			lock ( dataContext )
 			{
-				lock (CachedBlocks)
+				lock ( CachedBlocks )
 				{
-					List<Task> tasks = new List<Task>() { dataContext.SaveChangesAsync() };
+					List <Task> tasks = new List <Task> ( ) { dataContext . SaveChangesAsync ( ) } ;
 
-					foreach (KeyValuePair<long, CachedBlock> cachedPair in CachedBlocks)
+					foreach ( KeyValuePair <long , CachedBlock> cachedPair in CachedBlocks )
 					{
-						CachedBlock cachedBlock = cachedPair.Value;
-						tasks.Add(UpdateRemoteBlock(cachedBlock));
+						CachedBlock cachedBlock = cachedPair . Value ;
+						tasks . Add ( UpdateRemoteBlock ( cachedBlock ) ) ;
 					}
 
-					Task.WaitAll(tasks.ToArray());
+					Task . WaitAll ( tasks . ToArray ( ) ) ;
 				}
 			}
 		}
 
-		public SortedList<long, CachedBlock> CachedBlocks { get; set; } =
-			new SortedList<long, CachedBlock>();
-
-		public GraphServiceClient GraphServiceClient => CloudFileSystem.Current.GraphServiceClient;
-
-		public long BlockSize => CloudFileSystem.BlockSize;
-
-		public async Task UpdateRemoteBlock(CachedBlock cachedBlock)
+		public async Task UpdateRemoteBlock ( CachedBlock cachedBlock )
 		{
-
-			if (cachedBlock.IsModified)
+			if ( cachedBlock . IsModified )
 			{
-				long sequence = cachedBlock.Sequence;
+				long sequence = cachedBlock . Sequence ;
 
-				MemoryStream dataStream = new MemoryStream(cachedBlock.Content);
+				MemoryStream dataStream = new MemoryStream ( cachedBlock . Content ) ;
 
-				string fileName = $"{Program.Current.Setting.BlockDirectory}\\{Metadata.Guid}_{sequence}.bin";
+				string fileName =
+					$"{Program . Current . Setting . BlockDirectory}\\{Metadata . Guid}_{sequence}.bin" ;
 
-				DriveItem remoteFile = await GraphServiceClient.
-											 Me.Drive.Root.ItemWithPath(fileName).
-											 Content.Request().
-											 PutAsync<DriveItem>(dataStream);
+				DriveItem remoteFile = await GraphServiceClient .
+											 Me . Drive . Root . ItemWithPath ( fileName ) .
+											 Content . Request ( ) .
+											 WithMaxRetry ( 5 ) .
+											 PutAsync <DriveItem> ( dataStream ) ;
 
-				cachedBlock.Metadata.RemoteFileId = remoteFile.Id;
-				cachedBlock.IsModified = false;
+				cachedBlock . Metadata . RemoteFileId = remoteFile . Id ;
+				cachedBlock . IsModified              = false ;
 			}
-
 		}
 
-		public async Task<byte[]> DownloadRemoteBlock(long sequence)
+		public async Task <byte [ ]> DownloadRemoteBlock ( long sequence )
 		{
-			string fileName = $"{Program.Current.Setting.BlockDirectory}\\{Metadata.Guid}_{sequence}.bin";
+			string fileName =
+				$"{Program . Current . Setting . BlockDirectory}\\{Metadata . Guid}_{sequence}.bin" ;
 
-			Stream remoteFile = null;
+			Stream remoteFile = null ;
 
 			try
 			{
-				remoteFile = await GraphServiceClient.Me.Drive.Root.ItemWithPath(fileName).
-													  Content.Request().GetAsync();
+				remoteFile = await GraphServiceClient .
+								   Me . Drive . Root . ItemWithPath ( fileName ) .
+								   Content . Request ( ) .
+								   GetAsync ( ) ;
 			}
-			catch (Exception e)
+			catch ( Exception e )
 			{
-				Console.WriteLine(e);
+				Console . WriteLine ( e ) ;
 			}
 
-			byte[] blockData = new byte[BlockSize];
+			byte [ ] blockData = new byte[ BlockSize ] ;
 
-			if (remoteFile != null)
+			if ( remoteFile != null )
 			{
-				await remoteFile.ReadAsync(blockData);
+				await remoteFile . ReadAsync ( blockData ) ;
 			}
 
-			return blockData;
-
+			return blockData ;
 		}
 
-		public CachedBlock GetBlock(int sequenceNumber)
+		public CachedBlock GetBlock ( int sequenceNumber )
 		{
-
-			if (CachedBlocks.TryGetValue(sequenceNumber, out CachedBlock cachedBlock))
+			if ( CachedBlocks . TryGetValue ( sequenceNumber , out CachedBlock cachedBlock ) )
 			{
-				return cachedBlock;
+				return cachedBlock ;
 			}
 			else
 			{
-				cachedBlock = new CachedBlock()
-				{
-					Sequence = sequenceNumber,
-					Metadata = Blocks[sequenceNumber],
-					IsModified = false,
-					Content = DownloadRemoteBlock(sequenceNumber).Result
-				};
+				cachedBlock = new CachedBlock ( )
+							  {
+								  Sequence   = sequenceNumber ,
+								  Metadata   = Blocks [ sequenceNumber ] ,
+								  IsModified = false ,
+								  Content    = DownloadRemoteBlock ( sequenceNumber ) . Result
+							  } ;
 
-				lock (cachedBlock)
+				lock ( cachedBlock )
 				{
-					CachedBlocks.Add(sequenceNumber, cachedBlock);
+					CachedBlocks . Add ( sequenceNumber , cachedBlock ) ;
 				}
 
-				return cachedBlock;
+				return cachedBlock ;
 			}
 		}
 

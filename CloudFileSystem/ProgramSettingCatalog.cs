@@ -1,7 +1,7 @@
 ﻿using System ;
-using System.Collections ;
-using System.Collections.Generic ;
-using System.Linq ;
+using System . Collections ;
+using System . Collections . Generic ;
+using System . Linq ;
 
 namespace DreamRecorder . CloudFileSystem
 {
@@ -11,7 +11,7 @@ namespace DreamRecorder . CloudFileSystem
 
 		Onedrive = 0 ,
 
-		SqlServer=1,
+		SqlServer = 1 ,
 
 		FileSystem = 2 ,
 

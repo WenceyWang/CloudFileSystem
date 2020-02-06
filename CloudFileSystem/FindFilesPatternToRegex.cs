@@ -1,7 +1,7 @@
 ﻿using System ;
-using System.Collections ;
-using System.Collections.Generic ;
-using System.Linq ;
+using System . Collections ;
+using System . Collections . Generic ;
+using System . Linq ;
 using System . Text . RegularExpressions ;
 
 namespace DreamRecorder . CloudFileSystem
@@ -10,12 +10,13 @@ namespace DreamRecorder . CloudFileSystem
 	public static class FindFilesPatternToRegex
 	{
 
-		private static readonly Regex HasQuestionMarkRegEx = new Regex ( @"\?" , RegexOptions . Compiled ) ;
+		private static readonly Regex HasQuestionMarkRegEx =
+			new Regex ( @"\?" , RegexOptions . Compiled ) ;
 
 		private static readonly Regex IllegalCharactersRegex =
 			new Regex ( "[" + @"\/:<>|" + "\"]" , RegexOptions . Compiled ) ;
 
-		private static readonly Regex CatchExtentionRegex =
+		private static readonly Regex CatchExtensionRegex =
 			new Regex ( @"^\s*.+\.([^\.]+)\s*$" , RegexOptions . Compiled ) ;
 
 		private static string NonDotCharacters = @"[^.]*" ;
@@ -38,7 +39,7 @@ namespace DreamRecorder . CloudFileSystem
 				throw new ArgumentException ( "Pattern contains illegal characters." ) ;
 			}
 
-			bool hasExtension = CatchExtentionRegex . IsMatch ( pattern ) ;
+			bool hasExtension = CatchExtensionRegex . IsMatch ( pattern ) ;
 			bool matchExact   = false ;
 			if ( HasQuestionMarkRegEx . IsMatch ( pattern ) )
 			{
@@ -46,7 +47,7 @@ namespace DreamRecorder . CloudFileSystem
 			}
 			else if ( hasExtension )
 			{
-				matchExact = CatchExtentionRegex . Match ( pattern ) . Groups [ 1 ] . Length != 3 ;
+				matchExact = CatchExtensionRegex . Match ( pattern ) . Groups [ 1 ] . Length != 3 ;
 			}
 
 			string regexString = Regex . Escape ( pattern ) ;

@@ -1,14 +1,17 @@
 ﻿using System ;
-using System.Collections ;
-using System.Collections.Generic ;
+using System . Collections ;
+using System . Collections . Generic ;
 using System . ComponentModel . DataAnnotations ;
-using System.Linq ;
+using System . Linq ;
+
+using Fsp . Interop ;
 
 namespace DreamRecorder . CloudFileSystem
 {
 
 	public class FileMetadata
 	{
+
 		[Key]
 		public Guid Guid { get ; set ; }
 
@@ -47,23 +50,23 @@ namespace DreamRecorder . CloudFileSystem
 		[Required]
 		public uint HardLinks { get ; set ; }
 
-		 [Required]
+		[Required]
 		public byte [ ] SecurityInfo { get ; set ; }
 
-		public Fsp . Interop . FileInfo FileInfo
-			=> new Fsp . Interop . FileInfo
-				{
-					AllocationSize = ( ulong ) AllocatedSize ,
-					ChangeTime     = ChangeTime ,
-					CreationTime   = CreationTime ,
-					FileAttributes = Attributes ,
-					FileSize       = ( ulong ) Size ,
-					HardLinks      = 0 ,
-					IndexNumber    = 0 ,
-					LastAccessTime = LastAccessTime ,
-					LastWriteTime  = LastWriteTime ,
-					ReparseTag     = ReparseTag
-				} ;
+		public FileInfo FileInfo
+			=> new FileInfo
+			   {
+				   AllocationSize = ( ulong ) AllocatedSize ,
+				   ChangeTime     = ChangeTime ,
+				   CreationTime   = CreationTime ,
+				   FileAttributes = Attributes ,
+				   FileSize       = ( ulong ) Size ,
+				   HardLinks      = 0 ,
+				   IndexNumber    = 0 ,
+				   LastAccessTime = LastAccessTime ,
+				   LastWriteTime  = LastWriteTime ,
+				   ReparseTag     = ReparseTag
+			   } ;
 
 	}
 
