@@ -4,7 +4,7 @@ using System . Collections . Generic ;
 using System . ComponentModel . DataAnnotations ;
 using System . Linq ;
 
-namespace DreamRecorder . CloudFileSystem
+namespace DreamRecorder . CloudFileSystem . FileSystem
 {
 
 	public class BlockMetadata
@@ -13,13 +13,20 @@ namespace DreamRecorder . CloudFileSystem
 		[Key]
 		public Guid Guid { get ; set ; }
 
-		public string RemoteFileId { get ; set ; }
-
 		[Required]
 		public Guid File { get ; set ; }
 
 		[Required]
 		public long BlockSequence { get ; set ; }
+
+		public string RemoteFileName { get ; set ; }
+
+		[Required]
+		public bool IsEncrypted { get ; set ; }
+
+		public byte [ ] AesKey { get ; set ; }
+
+		public byte [ ] AesIV { get ; set ; }
 
 	}
 

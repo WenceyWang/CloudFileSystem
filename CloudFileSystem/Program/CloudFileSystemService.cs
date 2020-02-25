@@ -6,13 +6,14 @@ using System . Linq ;
 
 using Fsp ;
 
-namespace DreamRecorder . CloudFileSystem
+namespace DreamRecorder . CloudFileSystem . Program
 {
 
 	public class CloudFileSystemService : Service
 	{
 
-		public string ProgramName => $"{nameof ( DreamRecorder )}{nameof ( CloudFileSystem )}" ;
+		public string ProgramName
+			=> $"{nameof ( DreamRecorder )}{nameof ( FileSystem . CloudFileSystem )}" ;
 
 		public FileSystemHost Host { get ; private set ; }
 
@@ -22,14 +23,14 @@ namespace DreamRecorder . CloudFileSystem
 		{
 			try
 			{
-				string          debugLogFile    = null ;
-				uint            debugFlags      = 0 ;
-				string          volumePrefix    = null ;
-				string          mountPoint      = null ;
-				IntPtr          debugLogHandle  = ( IntPtr ) ( - 1 ) ;
-				FileSystemHost  host            = null ;
-				CloudFileSystem cloudFileSystem = null ;
-				int             I ;
+				string                       debugLogFile    = null ;
+				uint                         debugFlags      = 0 ;
+				string                       volumePrefix    = null ;
+				string                       mountPoint      = null ;
+				IntPtr                       debugLogHandle  = ( IntPtr ) ( - 1 ) ;
+				FileSystemHost               host            = null ;
+				FileSystem . CloudFileSystem cloudFileSystem = null ;
+				int                          I ;
 
 				for ( I = 1 ; args . Length > I ; I++ )
 				{
@@ -95,7 +96,10 @@ namespace DreamRecorder . CloudFileSystem
 					}
 				}
 
-				host = new FileSystemHost ( new CloudFileSystem ( ) ) { Prefix = volumePrefix } ;
+				host = new FileSystemHost ( new FileSystem . CloudFileSystem ( ) )
+					   {
+						   Prefix = volumePrefix
+					   } ;
 
 				if ( 0 > host . Mount ( mountPoint , null , true , debugFlags ) )
 				{

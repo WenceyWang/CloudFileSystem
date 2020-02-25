@@ -3,17 +3,19 @@ using System . Collections ;
 using System . Collections . Generic ;
 using System . Linq ;
 
-namespace DreamRecorder . CloudFileSystem
+namespace DreamRecorder . CloudFileSystem . Program
 {
 
 	public enum ProgramSettingCatalog
 	{
 
-		Onedrive = 0 ,
+		Common = 0 ,
 
-		SqlServer = 1 ,
+		PageBlob = 1 ,
 
-		FileSystem = 2 ,
+		SqlServer = 2 ,
+
+		FileSystem = 3 ,
 
 	}
 

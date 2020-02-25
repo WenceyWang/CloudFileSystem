@@ -5,13 +5,11 @@ using System . Linq ;
 
 using DreamRecorder . ToolBox . CommandLine ;
 
-namespace DreamRecorder . CloudFileSystem
+namespace DreamRecorder . CloudFileSystem . Program
 {
 
 	public class ProgramExitCode : ProgramExitCode <ProgramExitCode>
 	{
-
-		public static readonly ProgramExitCode InvalidSetting = ( ProgramExitCode ) 3 ;
 
 	}
 

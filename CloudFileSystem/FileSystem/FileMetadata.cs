@@ -6,7 +6,7 @@ using System . Linq ;
 
 using Fsp . Interop ;
 
-namespace DreamRecorder . CloudFileSystem
+namespace DreamRecorder . CloudFileSystem . FileSystem
 {
 
 	public class FileMetadata
@@ -52,6 +52,9 @@ namespace DreamRecorder . CloudFileSystem
 
 		[Required]
 		public byte [ ] SecurityInfo { get ; set ; }
+
+		[Required]
+		public bool IsDeleted { get ; set ; }
 
 		public FileInfo FileInfo
 			=> new FileInfo

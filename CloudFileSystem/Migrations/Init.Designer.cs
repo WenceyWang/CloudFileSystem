@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DreamRecorder.CloudFileSystem.Migrations
 {
     [DbContext(typeof(DataContext))]
-    [Migration("20200125052213_Init")]
+    [Migration("20200219110447_Init")]
     partial class Init
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -21,11 +21,17 @@ namespace DreamRecorder.CloudFileSystem.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128)
                 .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
-            modelBuilder.Entity("DreamRecorder.CloudFileSystem.BlockMetadata", b =>
+            modelBuilder.Entity("DreamRecorder.CloudFileSystem.FileSystem.BlockMetadata", b =>
                 {
                     b.Property<Guid>("Guid")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("AesIV")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<byte[]>("AesKey")
+                        .HasColumnType("varbinary(max)");
 
                     b.Property<long>("BlockSequence")
                         .HasColumnType("bigint");
@@ -33,7 +39,10 @@ namespace DreamRecorder.CloudFileSystem.Migrations
                     b.Property<Guid>("File")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("RemoteFileId")
+                    b.Property<bool>("IsEncrypted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("RemoteFileName")
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Guid");
@@ -41,7 +50,7 @@ namespace DreamRecorder.CloudFileSystem.Migrations
                     b.ToTable("BlockMetadata");
                 });
 
-            modelBuilder.Entity("DreamRecorder.CloudFileSystem.FileMetadata", b =>
+            modelBuilder.Entity("DreamRecorder.CloudFileSystem.FileSystem.FileMetadata", b =>
                 {
                     b.Property<Guid>("Guid")
                         .ValueGeneratedOnAdd()
@@ -64,6 +73,9 @@ namespace DreamRecorder.CloudFileSystem.Migrations
 
                     b.Property<decimal>("IndexNumber")
                         .HasColumnType("decimal(20,0)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
 
                     b.Property<decimal>("LastAccessTime")
                         .HasColumnType("decimal(20,0)");

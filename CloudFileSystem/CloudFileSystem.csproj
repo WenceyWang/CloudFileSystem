@@ -15,17 +15,23 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DreamRecorder.ToolBox.CommandLine" Version="1.1.5.479" />
+    <Compile Remove="Migrations\20200125052213_Init.cs" />
+    <Compile Remove="Migrations\20200125052213_Init.Designer.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DreamRecorder.ToolBox.CommandLine" Version="1.1.5" />
     <PackageReference Include="FIGlet.Net" Version="1.1.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="3.1.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="3.1.1">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="3.1.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="3.1.2">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Graph" Version="1.21.0" />
     <PackageReference Include="Microsoft.Graph.Auth" Version="1.0.0-preview.2" />
-	<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="3.1.1" />
-	<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="3.1.1" />
+	<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="3.1.2" />
+	<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="3.1.2" />
+	<PackageReference Include="Microsoft.IdentityModel.Clients.ActiveDirectory" Version="5.2.7" />
 	<PackageReference Include="System.IO.FileSystem.AccessControl" Version="4.7.0" />
   </ItemGroup>
 

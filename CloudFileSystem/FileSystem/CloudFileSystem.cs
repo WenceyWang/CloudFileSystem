@@ -7,8 +7,9 @@ using System . Runtime . InteropServices ;
 using System . Security . AccessControl ;
 using System . Text ;
 using System . Text . RegularExpressions ;
-using System . Threading ;
 
+using DreamRecorder . CloudFileSystem . PageBlobProviders ;
+using DreamRecorder . CloudFileSystem . Program ;
 using DreamRecorder . ToolBox . General ;
 
 using Fsp ;
@@ -18,11 +19,10 @@ using JetBrains . Annotations ;
 
 using Microsoft . Extensions . DependencyInjection ;
 using Microsoft . Extensions . Logging ;
-using Microsoft . Graph ;
 
 using FileInfo = Fsp . Interop . FileInfo ;
 
-namespace DreamRecorder . CloudFileSystem
+namespace DreamRecorder . CloudFileSystem . FileSystem
 {
 
 	public class CloudFileSystem : FileSystemBase
@@ -30,9 +30,9 @@ namespace DreamRecorder . CloudFileSystem
 
 		public ILogger Logger { get ; }
 
-		public static long BlockSize => 2 * 1024 * 1024 ;
+		public static int BlockSize => 2 * 1024 * 1024 ;
 
-		public ProgramSetting Setting => Program . Current . Setting ;
+		public ProgramSetting Setting => Program . Program . Current . Setting ;
 
 		public static CloudFileSystem Current { get ; private set ; }
 
@@ -41,12 +41,6 @@ namespace DreamRecorder . CloudFileSystem
 		public Dictionary <Guid , FileNode> FileNodes { get ; set ; } =
 			new Dictionary <Guid , FileNode> ( ) ;
 
-		public GraphServiceClient GraphServiceClient => Program . Current . GraphServiceClient ;
-
-		public long ? TotalQuotaCache { get ; set ; }
-
-		public long ? RemainingQuotaCache { get ; set ; }
-
 		public VolumeInfo VolumeInfo
 		{
 			get
@@ -54,17 +48,19 @@ namespace DreamRecorder . CloudFileSystem
 				VolumeInfo volumeInfo = new VolumeInfo ( ) { } ;
 				volumeInfo . SetVolumeLabel ( Setting . VolumeLabel ) ;
 
-				volumeInfo . TotalSize = ( ulong ) ( TotalQuotaCache     ?? long . MaxValue ) ;
-				volumeInfo . FreeSize  = ( ulong ) ( RemainingQuotaCache ?? 0 ) ;
+				volumeInfo . TotalSize = ( ulong ) ( Quota ? . TotalQuota     ?? long . MaxValue ) ;
+				volumeInfo . FreeSize  = ( ulong ) ( Quota ? . RemainingQuota ?? 0 ) ;
 
 				return volumeInfo ;
 			}
 		}
 
-		public Timer Timer { get ; set ; }
+		public ITaskDispatcher TaskDispatcher => Program . Program . TaskDispatcher ;
 
-		//public override int SetDelete(object FileNode, object FileDesc, string FileName, bool DeleteFile) => base.SetDelete(FileNode, FileDesc, FileName, DeleteFile);
+		public IPageBlobProvider PageBlobProvider { get ; } =
+			StaticServiceProvider . Provider . GetService <IPageBlobProvider> ( ) ;
 
+		public Quota ? Quota { get ; set ; }
 
 		public CloudFileSystem ( )
 		{
@@ -76,16 +72,81 @@ namespace DreamRecorder . CloudFileSystem
 			Logger . LogInformation ( "Database Initialized." ) ;
 		}
 
-		public void UpdateQuota ( object state = null )
+		public override void Cleanup ( object fileNode ,
+									   object fileDesc ,
+									   string fileName ,
+									   uint   flags )
 		{
-			Drive driveInfo = GraphServiceClient .
-							  Me . Drive . Request ( ) .
-							  GetAsync ( ) .
-							  Result ;
+			if ( fileDesc is FileMetadata metadata )
+			{
+				Logger . LogTrace ( $"{nameof ( Cleanup )} \"{metadata . Name}\"." ) ;
 
-			TotalQuotaCache = driveInfo ? . Quota ? . Total ?? long . MaxValue ;
+				if ( 0 != ( flags & CleanupDelete ) )
+				{
+					metadata . IsDeleted = true ;
+				}
 
-			RemainingQuotaCache = driveInfo ? . Quota ? . Remaining ?? 0 ;
+				FlushMetadata ( ) ;
+			}
+			else
+			{
+				throw GetIoExceptionWithNtStatus ( STATUS_INVALID_HANDLE ) ;
+			}
+		}
+
+		public override int CanDelete ( object fileNode , object fileDesc , string fileName )
+		{
+			if ( fileDesc is FileMetadata metadata )
+			{
+				if ( ( ( FileAttributes ) metadata . FileInfo . FileAttributes ) . HasFlag (
+																							FileAttributes .
+																								Directory )
+				)
+				{
+					string pathPrefix ;
+
+					if ( metadata . Name . EndsWith ( "\\" ) )
+					{
+						pathPrefix = metadata . Name ;
+					}
+					else
+					{
+						pathPrefix = $"{metadata . Name}\\" ;
+					}
+
+					lock ( DataContext )
+					{
+						if ( DataContext .
+							 FileMetadata .
+							 Where ( ( fileMetadata ) => ! fileMetadata . IsDeleted ) .
+							 Any (
+								  ( fileMetadata )
+									  => fileMetadata . Name . StartsWith ( pathPrefix ) ) )
+						{
+							return STATUS_DIRECTORY_NOT_EMPTY ;
+						}
+						else
+						{
+							return STATUS_SUCCESS ;
+						}
+					}
+				}
+				else
+				{
+					return STATUS_SUCCESS ;
+				}
+			}
+			else
+			{
+				throw GetIoExceptionWithNtStatus ( STATUS_INVALID_HANDLE ) ;
+			}
+		}
+
+		public void UpdateQuota ( )
+		{
+			Logger . LogTrace ( "Update Quota" ) ;
+
+			Quota = PageBlobProvider . GetQuota ( ) ;
 		}
 
 		public void ResizeFile ( [NotNull] FileNode file , long newSize )
@@ -93,6 +154,11 @@ namespace DreamRecorder . CloudFileSystem
 			if ( file == null )
 			{
 				throw new ArgumentNullException ( nameof ( file ) ) ;
+			}
+
+			if ( file . Metadata . Size == newSize )
+			{
+				return ;
 			}
 
 			FileMetadata metadata = file . Metadata ;
@@ -116,10 +182,7 @@ namespace DreamRecorder . CloudFileSystem
 
 			metadata . Size = newSize ;
 
-			lock ( DataContext )
-			{
-				DataContext . SaveChanges ( ) ;
-			}
+			FlushMetadata ( ) ;
 		}
 
 		public override int Init ( object host )
@@ -129,7 +192,6 @@ namespace DreamRecorder . CloudFileSystem
 			Current = this ;
 
 			UpdateQuota ( ) ;
-
 
 			FileMetadata rootDirectoryMetadata ;
 			lock ( DataContext )
@@ -169,11 +231,19 @@ namespace DreamRecorder . CloudFileSystem
 
 			Logger . LogInformation ( $"Filesystem Initialized." ) ;
 
-			Timer = new Timer (
-							   UpdateQuota ,
-							   null ,
-							   TimeSpan . FromMinutes ( 1 ) ,
-							   TimeSpan . FromMinutes ( 1 ) ) ;
+			IntervalTask updateQuotaTask = new IntervalTask (
+															 UpdateQuota ,
+															 TimeSpan . FromMinutes ( 2 ) ,
+															 priority : TaskPriority .
+																 Background ) ;
+
+			IntervalTask flushMetadataTask = new IntervalTask (
+															   FlushMetadata ,
+															   TimeSpan . FromSeconds ( 20 ) ,
+															   priority : TaskPriority . Low ) ;
+
+			TaskDispatcher . Dispatch ( updateQuotaTask ) ;
+			TaskDispatcher . Dispatch ( flushMetadataTask ) ;
 
 			return STATUS_SUCCESS ;
 		}
@@ -239,7 +309,8 @@ namespace DreamRecorder . CloudFileSystem
 				if ( ( createOptions & FILE_DIRECTORY_FILE ) != 0 )
 				{
 					//Directory
-					throw GetIoExceptionWithNtStatus ( STATUS_OBJECT_NAME_COLLISION ) ;
+
+					fileNode = null ;
 				}
 				else
 				{
@@ -316,10 +387,7 @@ namespace DreamRecorder . CloudFileSystem
 
 					fileNode = node ;
 
-					lock ( DataContext )
-					{
-						DataContext . SaveChanges ( ) ;
-					}
+					FlushMetadata ( ) ;
 				}
 			}
 
@@ -330,22 +398,30 @@ namespace DreamRecorder . CloudFileSystem
 			return STATUS_SUCCESS ;
 		}
 
+		public void FlushMetadata ( )
+		{
+			Logger . LogTrace ( $"{nameof ( FlushMetadata )}" ) ;
+
+			lock ( DataContext )
+			{
+				DataContext . SaveChanges ( ) ;
+			}
+		}
+
 		public override int Flush ( object fileNode , object fileDesc , out FileInfo fileInfo )
 		{
 			Logger . LogTrace ( $"{nameof ( Flush )} {( fileDesc as FileMetadata ) ? . Name}" ) ;
 
 			if ( fileNode is FileNode node )
 			{
-				node . Flush ( ) ;
+				OnetimeTask flushTask = new OnetimeTask ( node . Flush , default ) ;
+				TaskDispatcher . Dispatch ( flushTask ) ;
 			}
+
+			FlushMetadata ( ) ;
 
 			if ( fileDesc is FileMetadata metadata )
 			{
-				lock ( DataContext )
-				{
-					DataContext . SaveChanges ( ) ;
-				}
-
 				fileInfo = metadata . FileInfo ;
 			}
 			else
@@ -368,10 +444,10 @@ namespace DreamRecorder . CloudFileSystem
 		{
 			Logger . LogTrace ( $"{nameof ( SetVolumeLabel )} to {volumeLabel}." ) ;
 
-			Program . Current . Setting . VolumeLabel = volumeLabel ;
-			volumeInfo                                = VolumeInfo ;
+			Program . Program . Current . Setting . VolumeLabel = volumeLabel ;
+			volumeInfo                                          = VolumeInfo ;
 
-			Program . Current . SaveSettingFile ( ) ;
+			Program . Program . Current . SaveSettingFile ( ) ;
 
 			return STATUS_SUCCESS ;
 		}
@@ -384,8 +460,8 @@ namespace DreamRecorder . CloudFileSystem
 		{
 			if ( fileDesc is FileMetadata metadata )
 			{
-				Logger . LogInformation (
-										 $"{nameof ( Rename )} \"{metadata . Name}\" to {newFileName}." ) ;
+				Logger . LogDebug (
+								   $"{nameof ( Rename )} \"{metadata . Name}\" to {newFileName}." ) ;
 
 				string normalizedNewFileName =
 					newFileName . Normalize ( NormalizationForm . FormD ) ;
@@ -444,10 +520,7 @@ namespace DreamRecorder . CloudFileSystem
 					metadata . Name = normalizedNewFileName ;
 				}
 
-				lock ( DataContext )
-				{
-					DataContext . SaveChanges ( ) ;
-				}
+				FlushMetadata ( ) ;
 
 				return STATUS_SUCCESS ;
 			}
@@ -465,7 +538,7 @@ namespace DreamRecorder . CloudFileSystem
 			if ( fileNode is FileNode node
 			  && fileDesc is FileMetadata metadata )
 			{
-				Logger . LogTrace ( $"{nameof ( Overwrite )} of \"{metadata . Name}\"." ) ;
+				Logger . LogTrace ( $"{nameof ( Overwrite )} \"{metadata . Name}\"." ) ;
 
 				metadata . Size = 0 ;
 				if ( replaceFileAttributes )
@@ -477,10 +550,7 @@ namespace DreamRecorder . CloudFileSystem
 					metadata . Attributes |= fileAttributes ;
 				}
 
-				lock ( DataContext )
-				{
-					DataContext . SaveChanges ( ) ;
-				}
+				FlushMetadata ( ) ;
 
 				fileInfo = metadata . FileInfo ;
 
@@ -571,8 +641,8 @@ namespace DreamRecorder . CloudFileSystem
 
 				bytesTransferred = ( uint ) currentByteSequence ;
 
-				Logger . LogInformation (
-										 $"Read from \"{metadata . Name}\", start from {offset} with length {bytesTransferred}({( ( long ) bytesTransferred ) . BytesCountToHumanString ( )})." ) ;
+				Logger . LogDebug (
+								   $"Read from \"{metadata . Name}\", start from {offset} with length {bytesTransferred}({( ( long ) bytesTransferred ) . BytesCountToHumanString ( )})." ) ;
 
 				return STATUS_SUCCESS ;
 			}
@@ -619,9 +689,9 @@ namespace DreamRecorder . CloudFileSystem
 
 				int currentBlockSequence = startBlockSequence ;
 
-				#region firstBlock
-
 				CachedBlock currentBlock = node . GetBlock ( currentBlockSequence ) ;
+
+				#region firstBlock
 
 				int firstByteStartFrom = ( int ) ( offset % ( ulong ) BlockSize ) ;
 
@@ -671,8 +741,8 @@ namespace DreamRecorder . CloudFileSystem
 
 				fileInfo = metadata . FileInfo ;
 
-				Logger . LogInformation (
-										 $"Written to \"{metadata . Name}\", start from {offset} with length {bytesTransferred}({( ( long ) bytesTransferred ) . BytesCountToHumanString ( )})." ) ;
+				Logger . LogDebug (
+								   $"Written to \"{metadata . Name}\", start from {offset} with length {bytesTransferred}({( ( long ) bytesTransferred ) . BytesCountToHumanString ( )})." ) ;
 
 				return STATUS_SUCCESS ;
 			}
@@ -729,6 +799,7 @@ namespace DreamRecorder . CloudFileSystem
 					{
 						fileInFolder = DataContext .
 									   FileMetadata .
+									   Where ( ( fileMetadata ) => ! fileMetadata . IsDeleted ) .
 									   Where (
 											  fileMetadata
 												  => fileMetadata .
@@ -851,10 +922,7 @@ namespace DreamRecorder . CloudFileSystem
 					metadata . ChangeTime = changeTime ;
 				}
 
-				lock ( DataContext )
-				{
-					DataContext . SaveChanges ( ) ;
-				}
+				FlushMetadata ( ) ;
 
 				fileInfo = metadata . FileInfo ;
 
@@ -882,10 +950,7 @@ namespace DreamRecorder . CloudFileSystem
 
 				ResizeFile ( node , ( long ) newSize ) ;
 
-				lock ( DataContext )
-				{
-					DataContext . SaveChanges ( ) ;
-				}
+				FlushMetadata ( ) ;
 
 				fileInfo = metadata . FileInfo ;
 
@@ -956,7 +1021,8 @@ namespace DreamRecorder . CloudFileSystem
 									ReparseTag     = 0 ,
 									SecurityInfo =
 										securityDescriptor ?? DefaultSecurity . RootSecurity ,
-									Size = 0 ,
+									Size      = 0 ,
+									IsDeleted = false ,
 								} ;
 
 			lock ( DataContext )
@@ -991,7 +1057,8 @@ namespace DreamRecorder . CloudFileSystem
 									ReparseTag     = 0 ,
 									SecurityInfo =
 										securityDescriptor ?? DefaultSecurity . RootSecurity ,
-									Size = 0 ,
+									Size      = 0 ,
+									IsDeleted = false ,
 								} ;
 
 			lock ( DataContext )
@@ -1008,9 +1075,9 @@ namespace DreamRecorder . CloudFileSystem
 		{
 			BlockMetadata blockMetadata = new BlockMetadata ( )
 										  {
-											  RemoteFileId  = null ,
 											  File          = file ,
-											  BlockSequence = sequence
+											  BlockSequence = sequence ,
+											  IsEncrypted   = Setting . EncryptFileBlock ,
 										  } ;
 
 			lock ( DataContext )
@@ -1088,16 +1155,20 @@ namespace DreamRecorder . CloudFileSystem
 
 				FileSecurity security = new FileSecurity ( ) ;
 
-				security . SetSecurityDescriptorBinaryForm ( metadata . SecurityInfo ) ;
-
-				security . SetSecurityDescriptorBinaryForm ( securityDescriptor , sections ) ;
-
-				metadata . SecurityInfo = security . GetSecurityDescriptorBinaryForm ( ) ;
-
-				lock ( DataContext )
+				if ( sections != AccessControlSections . None )
 				{
-					DataContext . SaveChanges ( ) ;
+					security . SetSecurityDescriptorBinaryForm ( metadata . SecurityInfo ) ;
+
+					security . SetSecurityDescriptorBinaryForm ( securityDescriptor , sections ) ;
+
+					metadata . SecurityInfo = security . GetSecurityDescriptorBinaryForm ( ) ;
 				}
+				else
+				{
+					metadata . SecurityInfo = securityDescriptor ;
+				}
+
+				FlushMetadata ( ) ;
 
 				Logger . LogDebug ( $"Set security of {metadata . Name}" ) ;
 
@@ -1201,13 +1272,14 @@ namespace DreamRecorder . CloudFileSystem
 
 			if ( fileNode is FileNode node )
 			{
-				node . Flush ( ) ;
-
 				node . ReferenceCount-- ;
 
 				if ( node . ReferenceCount <= 0 )
 				{
 					node . ClosedTime = DateTime . Now ;
+
+					OnetimeTask flushTask = new OnetimeTask ( node . Flush , default ) ;
+					TaskDispatcher . Dispatch ( flushTask ) ;
 
 					Logger . LogDebug ( $"Close {node . Metadata . Name}." ) ;
 				}
@@ -1227,16 +1299,26 @@ namespace DreamRecorder . CloudFileSystem
 
 		public override void Unmounted ( object host )
 		{
-			lock ( DataContext )
-			{
-				DataContext . SaveChanges ( ) ;
-			}
+			FlushMetadata ( ) ;
 
 			lock ( FileNodes )
 			{
 				foreach ( KeyValuePair <Guid , FileNode> fileNodePair in FileNodes )
 				{
-					fileNodePair . Value . Flush ( ) ;
+					bool success = false ;
+
+					while ( ! success )
+					{
+						try
+						{
+							fileNodePair . Value . Flush ( ) ;
+							success = true ;
+						}
+						catch ( Exception e )
+						{
+							Console . WriteLine ( e ) ;
+						}
+					}
 				}
 
 				FileNodes . Clear ( ) ;
